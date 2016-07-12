@@ -154,6 +154,7 @@ complexity[,c(1, 3)]
 ### Compare the lexical variety in plot
 ```{r}
 complexity_dfVis <- tidyr::gather(complexity, category, variety, ttr, hapax)
+complexity_dfVis$doc[complexity_dfVis$doc == "sumFreq"] <- "Corpus"
 complexity_dfVis
 ```
 
@@ -161,6 +162,7 @@ The visualization can easily show the consistency and difference of the two meas
 ```{r}
 ggplot(complexity_dfVis, aes(x = doc, y = variety, fill = category)) +
     geom_bar(stat="identity", position=position_dodge()) +
-  xlab("Documents") + ylab("Complexity")
+  xlab("Documents") + ylab("Complexity") +
+  scale_fill_discrete(name = "Measurement", labels = c("Hapax", "TTR"))
 ```
 
