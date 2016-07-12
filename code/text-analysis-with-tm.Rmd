@@ -1,0 +1,166 @@
+---
+title: "Text Analysis on Bills"
+author: "Hu, Yue"
+date: '`r Sys.Date()`'
+output: html_notebook
+---
+
+This is just a short intro to input and analyze multiple .txt files from the local drive through `tm` package.
+For analytical convenience, we will preload some other packages for data mining and string managements.
+
+```{r}
+if (!require(pacman)) install.packages("pacman")
+library(pacman) # package for load multiple packages together
+
+p_load(tm, # the main analytic package
+       wordcloud, # creating word clouds based on a DTM
+       ggplot2, # graphing package
+       stringr, # string management 
+       dplyr) # data mining
+
+Sys.setlocale(locale = "C") # remove any preset of system language
+```
+
+## Data loading and cleaning
+
+The first step is to locate the data.
+One can get the current working directory through function `getwd()`, and modify it by `setwd()`.
+However, if this is a project involving more than once coding, users are suggested to create a R [project](https://support.rstudio.com/hc/en-us/articles/200526207-Using-Projects). 
+Users then don't have to set the working directory at each time and is convenient to do version controls with Github or SVN.
+
+After setting the working directory, one can use `DirSource` function to tell R where the files are located and input them as a `corpus` object.
+
+```{r}
+dir <- "../data/bills-text"
+
+corpus_bill <- Corpus(DirSource(dir))
+
+class(corpus_bill);names(corpus_bill)
+```
+If researchers want to check the information of any single document in the corpus, they can do this:
+```{r}
+inspect(corpus_bill[2])
+```
+```{r}
+content(corpus_bill[[2]])[1:5]
+```
+
+
+More than often, users care more about the substantive words than functional words (such as "to", "of", "for"), digits, and punctuations.
+To avoid their disturbing the later analysis, one needs to "clean" the texts first.
+It usually includes converting upper cases to lower cases, removing punctuation and non alphabetic characters, deleting white spaces (e.g., caused by double spacing), etc. 
+Another oft-used process is to remove all the stop words (viz., functional words). 
+Here I only show how to do some common cleanings with `tm` functions. 
+Users can omit or add steps according to their researching goals.
+More functions can be found in the help file of `tm` package.
+
+```{r}
+corpus_bill <- tm_map(corpus_bill, PlainTextDocument) %>%
+  tm_map(content_transformer(tolower)) %>% # to lower case
+  tm_map(removePunctuation) %>% # remove all the punctuations
+  tm_map(removeNumbers) %>% # remove numbers
+  tm_map(stripWhitespace) %>% #remove empty lines
+  tm_map(stemDocument) %>% #stemming the words, e.g., treating "do" and "doing" as the same word.
+  tm_map(removeWords, stopwords("english")) 
+
+# A glimpse to the stop words that have been removed from the texts
+stopwords("english")[1:5]
+
+## Users can create their own stopwords based on the existing one or from a separate file
+###Not run###
+# stop_new <- c(stopwords("english"), "department") # adding "department" into the stopword list
+# stop_new <- stop_new[stop_new != "ours"] # deleting "ours" from the stopword list
+############
+```
+
+## Word Counts
+
+A common way to do word counting and relevant analyses in R is to convert texts to word matrices, i.e., document-term matrices, in which the rows are documents and the columns are words (terms).
+Then one is free to count word frequency within a document or in the whole corpus.
+
+### Calculate Word Counts
+
+```{r}
+dtm_bill <- DocumentTermMatrix(corpus_bill) # convert to DTM
+inspect(dtm_bill[, 1:10])
+```
+
+Now, let's find the most frequent words in a couple of ways:
+
+* What words appear more than a certain frequency (e.g., 300 times)?
+```{r}
+findFreqTerms(dtm_bill, 300)
+```
+
+* What are the first ten most frequent words?
+```{r}
+freq <- as.matrix(dtm_bill) %>% t %>% as.data.frame %>% tibble::rownames_to_column(var = "term")
+# convert the dtm to a dataframe for the convenience of arrangement
+names(freq) <- list.files(dir) %>% str_sub(end = 4) %>% c("term", .)
+# using the first four letters of each file as the column names.
+
+# the most frequent words in Document 1
+select(freq, 1:2) %>% arrange(desc(Adop)) %>% head
+```
+```{r}
+# the most frequent words in Document 2
+select(freq, term, Alco) %>% arrange(desc(Alco)) %>% head
+```
+```{r}
+# the most frequent words in the whole corpus
+freq_df <- mutate(freq, sumFreq = Adop + Alco) %>% arrange(desc(sumFreq)) 
+head(freq_df)
+```
+
+### Visualize Word Counts
+A prevalent while not very informative way to present word counts is through wordcloud.
+Let's create a word cloud containing words which frequencies are above the average.
+```{r}
+wordcloud(freq_df$term, freq_df$sumFreq, 
+          scale=c(5,.2), min.freq=mean(freq_df$sumFreq),
+          random.order=FALSE, rot.per=.15, colors=brewer.pal(8,"Dark2"))
+```
+
+## Measure Lexical Variety
+According to Matthew Jockers, there are a couple of ways to measure lexical variety, i.e., how complex or difficult a document is:
+
+* Type-Token Ratio: dividing the total number of unique word types by the total number of word tokens. 
+(Please double check if the following calculation matches the definition of TTR.
+See the definition in Jockers 2014, 59.)
+```{r}
+freq_dfAg <- summarise_if(freq_df, is.numeric, sum) # calculate the sum of words
+freq_dfAg$unique <- length(freq_df$term) # calculate the sum of unique words
+
+complexity <- data.frame(doc = colnames(freq_dfAg)[-4], stringsAsFactors = F)
+complexity$ttr <- freq_dfAg$unique / freq_dfAg[,1:3] %>% t
+complexity
+```
+
+* Hapax Richness
+Hapax legomena measures the ratio of words that were only used once in a document to the entire vocabulary of the document.
+
+```{r}
+length(freq_df$term[freq_df$Adop == 1]) #words only used once in Document 1
+length(freq_df$term[freq_df$Alco == 1]) #words only used once in Document 2
+length(freq_df$term[freq_df$sumFreq == 1]) #words only used once in either one document
+```
+
+```{r}
+complexity$hapax <- c(length(freq_df$term[freq_df$Adop == 1]), length(freq_df$term[freq_df$Alco == 1]), length(freq_df$term[freq_df$sumFreq == 1])) / freq_dfAg[,1:3] %>% t
+
+complexity[,c(1, 3)]
+```
+
+### Compare the lexical variety in plot
+```{r}
+complexity_dfVis <- tidyr::gather(complexity, category, variety, ttr, hapax)
+complexity_dfVis
+```
+
+The visualization can easily show the consistency and difference of the two measurement of document complexity.
+```{r}
+ggplot(complexity_dfVis, aes(x = doc, y = variety, fill = category)) +
+    geom_bar(stat="identity", position=position_dodge()) +
+  xlab("Documents") + ylab("Complexity")
+```
+
