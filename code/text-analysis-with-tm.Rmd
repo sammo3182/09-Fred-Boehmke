@@ -42,7 +42,7 @@ If researchers want to check the information of any single document in the corpu
 inspect(corpus_bill[2])
 ```
 ```{r}
-content(corpus_bill[[2]])[1:5]
+content(corpus_bill[[2]])[1:20]
 ```
 
 
@@ -113,7 +113,7 @@ head(freq_df)
 ```
 
 ### Visualize Word Counts
-A prevalent while not very informative way to present word counts is through wordcloud.
+A prevalent (yet not very informative) way to present word counts is through wordcloud.
 Let's create a word cloud containing words which frequencies are above the average.
 ```{r}
 wordcloud(freq_df$term, freq_df$sumFreq, 
@@ -122,7 +122,7 @@ wordcloud(freq_df$term, freq_df$sumFreq,
 ```
 
 ## Measure Lexical Variety
-According to Matthew Jockers, there are a couple of ways to measure lexical variety, i.e., how complex or difficult a document is:
+According to Matthew Jockers (2014), there are a couple of ways to measure lexical variety, i.e., how complex or difficult a document is:
 
 * Type-Token Ratio: dividing the total number of unique word types by the total number of word tokens. 
 (Please double check if the following calculation matches the definition of TTR.
