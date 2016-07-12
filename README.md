@@ -1,2 +1,2 @@
 # 09-Fred-Boehmke
-A text analysisproject
+A project of text analysis.
